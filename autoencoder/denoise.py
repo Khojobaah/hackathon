@@ -1,39 +1,54 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-import keras
+import os
 
 from tensorflow.keras.datasets import mnist
 from tensorflow.keras.layers import Input, Dense, Reshape, Flatten, Conv2D, Conv2DTranspose
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.utils import Sequence
+
 
     
+class ImageDataGenerator(Sequence):
+    def __init__(self, folder, batch_size, img_size, **kwargs):
+        self.folder = folder
+        self.batch_size = batch_size
+        self.img_size = img_size
+        self.image_files = [os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(('.jpg', '.jpeg', '.png'))]
+        self.on_epoch_end()
+        super().__init__(**kwargs)  # Call the base class constructor
 
-# Function to resize a batch of images
-def resize_images(images, new_size):
-    resized_images = []
-    for image in images:
-        resized_image = cv2.resize(image, new_size, interpolation=cv2.INTER_CUBIC)
-        resized_images.append(resized_image)
-    return np.array(resized_images)
+    def __len__(self):
+        return int(np.floor(len(self.image_files) / self.batch_size))
 
+    def __getitem__(self, index):
+        batch_files = self.image_files[index * self.batch_size:(index + 1) * self.batch_size]
+        images = [cv2.imread(f, cv2.IMREAD_GRAYSCALE) for f in batch_files]
+        images = [cv2.resize(img, self.img_size) for img in images]
+        images = np.array(images).astype('float32') / 255.0
+        images = np.expand_dims(images, axis=-1)
+        return images, images
+
+    def on_epoch_end(self):
+        np.random.shuffle(self.image_files)
 
 # Loading and Preprocessing the Dataset
 (x_train, _), (x_test, _) = mnist.load_data()
 
 # Resize the images
 new_size = (200, 200)
-x_train_resized = resize_images(x_train, new_size)
-x_test_resized = resize_images(x_test, new_size)
+x_train = x_train
+x_test = x_test
 
 
 # Preprocessing the Dataset
-x_train_resized = x_train_resized.astype('float32') / 255.0
-x_test_resized = x_test_resized.astype('float32') / 255.0
-x_train = np.expand_dims(x_train_resized, axis=-1)
-x_test = np.expand_dims(x_test_resized, axis=-1)
+x_train = x_train.astype('float32') / 255.0
+x_test = x_test.astype('float32') / 255.0
+x_train = np.expand_dims(x_train, axis=-1)
+x_test = np.expand_dims(x_test, axis=-1)
 
 
 # Adding Random Noise to the Training Set
@@ -45,7 +60,7 @@ x_test_noisy = np.clip(x_test_noisy, 0., 1.)
 
 
 #  Creating the Autoencoder Model #
-input_shape = (None, None, 1)
+input_shape = (200, 200, 1)
 latent_dim = 128
 
 # Encoder
